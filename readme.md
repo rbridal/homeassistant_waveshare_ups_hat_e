@@ -8,6 +8,14 @@ This repository is the actively maintained continuation of the original project 
 
 <img width="420" height="400" alt="image" src="https://github.com/user-attachments/assets/74820614-0d57-45a6-a311-c3653d788e2f" />
 
+## Related repositories
+
+Rule of thumb: HAT on the HA box → use the local integration; HAT on a different Pi → install the remote service on that Pi and the remote integration in Home Assistant.
+
+- [homeassistant_waveshare_ups_hat_e](https://github.com/rbridal/homeassistant_waveshare_ups_hat_e) — Home Assistant integration for a UPS HAT (E) attached directly to the HA host (I2C). **This repo.**
+- [ha-ups-hat-e-remote](https://github.com/rbridal/ha-ups-hat-e-remote) — Home Assistant integration that displays a remote UPS HAT (E) over MQTT.
+- [ups-hat-e-remote](https://github.com/rbridal/ups-hat-e-remote) — Companion service that runs on the Pi with the HAT, reads I2C, and publishes status over MQTT.
+
 ## Installation
 
 ### HACS (recommended)
