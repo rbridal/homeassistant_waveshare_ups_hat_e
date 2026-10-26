@@ -6,7 +6,6 @@ Register map is taken from Waveshare's official ``ups.py`` demo.
 """
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 try:
@@ -14,14 +13,21 @@ try:
 except ImportError:  # pragma: no cover - fallback for older images
     import smbus
 
-_LOGGER = logging.getLogger(__name__)
-
 DEFAULT_ADDR = 0x2D
 DEFAULT_BUS = 1
 
 # Sentinel returned by the MCU for a time estimate that does not apply
 # (e.g. "time to empty" while the pack is charging).
 _NA = 0xFFFF
+
+
+def parse_i2c_address(value: object) -> int:
+    """Parse a decimal or 0x-hex I2C address.
+
+    Raises:
+        ValueError: The value is empty or not numeric.
+    """
+    return int(str(value).strip(), 0)
 
 
 def _u16(data: list[int], i: int) -> int:
@@ -38,15 +44,41 @@ def _s16(data: list[int], i: int) -> int:
 
 
 class UPSHatE:
-    """Raw reader for the UPS HAT (E) MCU."""
+    """Raw reader for the UPS HAT (E) MCU.
+
+    Constructing the object does not touch the I2C device. ``open()`` and
+    ``read()`` open ``/dev/i2c-*`` and must run in an executor.
+    """
 
     def __init__(self, i2c_bus: int = DEFAULT_BUS, addr: int = DEFAULT_ADDR) -> None:
         self.addr = addr
-        self.bus = smbus.SMBus(i2c_bus)
+        self._i2c_bus = i2c_bus
+        self._bus: Any | None = None
+
+    def open(self) -> None:
+        """Open the I2C bus. Blocking; call from an executor.
+
+        Raises:
+            OSError: The bus device does not exist or cannot be opened.
+        """
+        if self._bus is None:
+            self._bus = smbus.SMBus(self._i2c_bus)
+
+    def close(self) -> None:
+        """Close the I2C bus if it is open. Blocking; call from an executor."""
+        bus = self._bus
+        self._bus = None
+        if bus is not None:
+            bus.close()
 
     def read(self) -> dict[str, Any]:
         """Read all registers and return a parsed dict (raw units: mV/mA/mW)."""
-        status = self.bus.read_i2c_block_data(self.addr, 0x02, 0x01)[0]
+        self.open()
+        bus = self._bus
+        if bus is None:  # pragma: no cover - open() assigns the bus or raises
+            raise OSError(f"I2C bus {self._i2c_bus} is not open")
+
+        status = bus.read_i2c_block_data(self.addr, 0x02, 0x01)[0]
         if status & 0x40:
             state = "fast_charging"
         elif status & 0x80:
@@ -56,9 +88,9 @@ class UPSHatE:
         else:
             state = "idle"
 
-        vbus = self.bus.read_i2c_block_data(self.addr, 0x10, 0x06)
-        bat = self.bus.read_i2c_block_data(self.addr, 0x20, 0x0C)
-        cells = self.bus.read_i2c_block_data(self.addr, 0x30, 0x08)
+        vbus = bus.read_i2c_block_data(self.addr, 0x10, 0x06)
+        bat = bus.read_i2c_block_data(self.addr, 0x20, 0x0C)
+        cells = bus.read_i2c_block_data(self.addr, 0x30, 0x08)
 
         battery_current = _s16(bat, 2)
         time_to_empty = _u16(bat, 8)
@@ -90,3 +122,12 @@ class UPSHatE:
             "cell_voltage_3": _u16(cells, 4),
             "cell_voltage_4": _u16(cells, 6),
         }
+
+
+def probe_device(i2c_bus: int, addr: int) -> dict[str, Any]:
+    """Read the UPS once and always release the I2C file handle."""
+    ups = UPSHatE(i2c_bus=i2c_bus, addr=addr)
+    try:
+        return ups.read()
+    finally:
+        ups.close()

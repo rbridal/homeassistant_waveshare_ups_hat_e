@@ -10,7 +10,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
 from .const import CONF_ADDR, CONF_BUS, DEFAULT_ADDR, DEFAULT_BUS, DEFAULT_NAME, DOMAIN
-from .ups_hat_e import UPSHatE
+from .ups_hat_e import parse_i2c_address, probe_device
 
 
 def _box_number(
@@ -34,7 +34,8 @@ async def _async_validate_i2c(hass: HomeAssistant, bus: int, addr: int) -> str |
     """Try a quick I2C read; return error key or None on success."""
 
     def _probe() -> None:
-        UPSHatE(i2c_bus=bus, addr=addr).read()
+        # probe_device closes the bus even when the read fails.
+        probe_device(bus, addr)
 
     try:
         await hass.async_add_executor_job(_probe)
@@ -62,19 +63,22 @@ class WaveshareUpsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             bus = int(user_input[CONF_BUS])
-            addr = int(str(user_input[CONF_ADDR]), 0)  # accept 0x2d or 45
-
-            await self.async_set_unique_id(f"e_{bus}_{addr:02x}")
-            self._abort_if_unique_id_configured()
-
-            error = await _async_validate_i2c(self.hass, bus, addr)
-            if error:
-                errors["base"] = error
+            try:
+                addr = parse_i2c_address(user_input[CONF_ADDR])
+            except ValueError:
+                errors[CONF_ADDR] = "invalid_address"
             else:
-                return self.async_create_entry(
-                    title=DEFAULT_NAME,
-                    data={CONF_BUS: bus, CONF_ADDR: addr},
-                )
+                await self.async_set_unique_id(f"e_{bus}_{addr:02x}")
+                self._abort_if_unique_id_configured()
+
+                error = await _async_validate_i2c(self.hass, bus, addr)
+                if error:
+                    errors["base"] = error
+                else:
+                    return self.async_create_entry(
+                        title=DEFAULT_NAME,
+                        data={CONF_BUS: bus, CONF_ADDR: addr},
+                    )
 
         return self.async_show_form(
             step_id="user",
