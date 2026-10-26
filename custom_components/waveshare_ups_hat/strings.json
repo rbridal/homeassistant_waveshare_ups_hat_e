@@ -12,6 +12,7 @@
     },
     "error": {
       "cannot_connect": "Could not communicate with the UPS over I2C. Check wiring, that I2C is enabled, and the address (default 0x2d).",
+      "invalid_address": "I2C address must be a decimal or hex number, for example 45 or 0x2d.",
       "unknown": "Unexpected error while probing the device."
     },
     "abort": {

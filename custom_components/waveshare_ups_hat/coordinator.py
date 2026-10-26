@@ -30,7 +30,17 @@ class WaveshareUpsCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.entry = entry
         self.bus = entry.data.get(CONF_BUS, 1)
         self.addr = entry.data[CONF_ADDR]
+        # Do not open the bus here. UPSHatE() only stores settings; SMBus()
+        # opens /dev/i2c-* and must run in the executor (see open_bus/read).
         self._ups = UPSHatE(i2c_bus=self.bus, addr=self.addr)
+
+    def open_bus(self) -> None:
+        """Open the I2C bus. Blocking; run via hass.async_add_executor_job."""
+        self._ups.open()
+
+    def close_bus(self) -> None:
+        """Close the I2C bus. Blocking; run via hass.async_add_executor_job."""
+        self._ups.close()
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from the UPS (runs I2C in executor)."""
