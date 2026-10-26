@@ -7,5 +7,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/rbridal/homeassistant_waveshare_ups_hat_e/issues",
   "requirements": ["smbus2>=0.4.2"],
-  "version": "0.4.1"
+  "version": "0.4.2"
 }
